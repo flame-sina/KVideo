@@ -3,11 +3,27 @@
 import { useState, useEffect } from 'react';
 import { getSession, clearSession } from '@/lib/store/auth-store';
 import { SettingsSection } from './SettingsSection';
+import { Icons } from '@/components/ui/Icon';
 import { LogOut, Shield, Info } from 'lucide-react';
+
+interface AccountInfo {
+  name: string;
+  role: 'admin' | 'viewer';
+}
+
+interface ConfigEntry {
+  password: string;
+  name: string;
+  role: 'admin' | 'viewer';
+}
 
 export function AccountSettings() {
   const [session, setSessionState] = useState<ReturnType<typeof getSession>>(null);
   const [hasAuth, setHasAuth] = useState(false);
+  const [accounts, setAccounts] = useState<AccountInfo[]>([]);
+  const [showConfigGen, setShowConfigGen] = useState(false);
+  const [configEntries, setConfigEntries] = useState<ConfigEntry[]>([]);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setSessionState(getSession());
@@ -16,11 +32,51 @@ export function AccountSettings() {
       .then(res => res.json())
       .then(data => setHasAuth(data.hasAuth))
       .catch(() => {});
+
+    // Fetch account list for admins
+    fetch('/api/auth/accounts')
+      .then(res => res.json())
+      .then(data => {
+        if (data.accounts) setAccounts(data.accounts);
+      })
+      .catch(() => {});
   }, []);
 
   const handleLogout = () => {
     clearSession();
     window.location.reload();
+  };
+
+  const isAdmin = session?.role === 'admin';
+
+  // Config generator helpers
+  const addConfigEntry = () => {
+    setConfigEntries([...configEntries, { password: '', name: '', role: 'viewer' }]);
+  };
+
+  const updateConfigEntry = (index: number, field: keyof ConfigEntry, value: string) => {
+    const updated = [...configEntries];
+    updated[index] = { ...updated[index], [field]: value };
+    setConfigEntries(updated);
+  };
+
+  const removeConfigEntry = (index: number) => {
+    setConfigEntries(configEntries.filter((_, i) => i !== index));
+  };
+
+  const generateAccountsString = () => {
+    return configEntries
+      .filter(e => e.password.trim() && e.name.trim())
+      .map(e => `${e.password}:${e.name}${e.role === 'admin' ? ':admin' : ''}`)
+      .join(',');
+  };
+
+  const handleCopy = () => {
+    const str = generateAccountsString();
+    navigator.clipboard.writeText(str).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   };
 
   if (!hasAuth && !session) return null;
@@ -55,6 +111,131 @@ export function AccountSettings() {
                 退出登录
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Account List (Admin only) */}
+        {isAdmin && accounts.length > 0 && (
+          <div>
+            <h3 className="text-sm font-medium text-[var(--text-color)] mb-3 flex items-center gap-2">
+              <Icons.Users size={16} className="text-[var(--accent-color)]" />
+              已配置的账户
+            </h3>
+            <div className="space-y-2">
+              {accounts.map((account, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between px-4 py-2.5 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-[var(--radius-2xl)]"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-[var(--radius-full)] bg-[var(--accent-color)]/10 flex items-center justify-center text-[var(--accent-color)] font-bold text-sm border border-[var(--glass-border)]">
+                      {account.name.charAt(0)}
+                    </div>
+                    <span className="text-sm text-[var(--text-color)]">{account.name}</span>
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-[var(--radius-full)] ${
+                    account.role === 'admin'
+                      ? 'bg-[var(--accent-color)]/10 text-[var(--accent-color)]'
+                      : 'bg-[var(--glass-bg)] text-[var(--text-color-secondary)] border border-[var(--glass-border)]'
+                  }`}>
+                    {account.role === 'admin' ? '管理员' : '观众'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Config Generator (Admin only) */}
+        {isAdmin && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-[var(--text-color)] flex items-center gap-2">
+                <Icons.Settings size={16} className="text-[var(--accent-color)]" />
+                配置生成器
+              </h3>
+              <button
+                onClick={() => setShowConfigGen(!showConfigGen)}
+                className="text-xs text-[var(--accent-color)] hover:underline cursor-pointer"
+              >
+                {showConfigGen ? '收起' : '展开'}
+              </button>
+            </div>
+
+            {showConfigGen && (
+              <div className="space-y-4 p-4 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-[var(--radius-2xl)]">
+                <p className="text-xs text-[var(--text-color-secondary)]">
+                  添加账户条目后，将生成的 <code className="px-1 py-0.5 bg-[var(--glass-bg)] rounded text-[10px]">ACCOUNTS</code> 环境变量值复制到部署配置中。
+                </p>
+
+                {/* Entry List */}
+                {configEntries.map((entry, index) => (
+                  <div key={index} className="flex gap-2 items-start">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="密码"
+                          value={entry.password}
+                          onChange={(e) => updateConfigEntry(index, 'password', e.target.value)}
+                          className="flex-1 px-3 py-1.5 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-[var(--radius-2xl)] text-sm text-[var(--text-color)] placeholder:text-[var(--text-color-secondary)]/50 focus:outline-none focus:border-[var(--accent-color)]"
+                        />
+                        <input
+                          type="text"
+                          placeholder="名称"
+                          value={entry.name}
+                          onChange={(e) => updateConfigEntry(index, 'name', e.target.value)}
+                          className="flex-1 px-3 py-1.5 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-[var(--radius-2xl)] text-sm text-[var(--text-color)] placeholder:text-[var(--text-color-secondary)]/50 focus:outline-none focus:border-[var(--accent-color)]"
+                        />
+                        <select
+                          value={entry.role}
+                          onChange={(e) => updateConfigEntry(index, 'role', e.target.value)}
+                          className="px-2 py-1.5 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-[var(--radius-2xl)] text-xs text-[var(--text-color)] focus:outline-none focus:border-[var(--accent-color)]"
+                        >
+                          <option value="viewer">观众</option>
+                          <option value="admin">管理员</option>
+                        </select>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeConfigEntry(index)}
+                      className="p-1.5 text-[var(--text-color-secondary)] hover:text-red-500 transition-colors cursor-pointer mt-1"
+                    >
+                      <Icons.Trash size={14} />
+                    </button>
+                  </div>
+                ))}
+
+                <button
+                  onClick={addConfigEntry}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--glass-bg)] border border-[var(--glass-border)] border-dashed rounded-[var(--radius-2xl)] text-[var(--text-color-secondary)] hover:text-[var(--accent-color)] hover:border-[var(--accent-color)]/30 transition-all w-full justify-center cursor-pointer"
+                >
+                  <Icons.Plus size={12} />
+                  添加账户
+                </button>
+
+                {/* Generated Output */}
+                {configEntries.length > 0 && configEntries.some(e => e.password && e.name) && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-[var(--text-color)]">
+                      生成的 ACCOUNTS 值：
+                    </label>
+                    <div className="flex gap-2">
+                      <code className="flex-1 px-3 py-2 bg-black/20 border border-[var(--glass-border)] rounded-[var(--radius-2xl)] text-xs text-[var(--text-color)] break-all select-all">
+                        {generateAccountsString()}
+                      </code>
+                      <button
+                        onClick={handleCopy}
+                        className="px-3 py-2 bg-[var(--accent-color)] text-white rounded-[var(--radius-2xl)] text-xs hover:opacity-90 transition-all cursor-pointer flex items-center gap-1 flex-shrink-0"
+                      >
+                        <Icons.Copy size={12} />
+                        {copied ? '已复制' : '复制'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
