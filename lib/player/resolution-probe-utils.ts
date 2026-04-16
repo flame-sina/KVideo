@@ -1,4 +1,4 @@
-import { extractPlaybackQualityLabel } from '@/lib/utils/video';
+import { extractNumericResolutionLabel } from '@/lib/utils/video';
 
 export interface ResolutionProbeLabel {
   label: string;
@@ -8,27 +8,22 @@ export interface ResolutionProbeLabel {
 }
 
 const QUALITY_RANK: Record<string, number> = {
+  '8K': 780,
   '4K': 700,
   '2K': 620,
   '1080P': 540,
-  '蓝光': 520,
-  'HDR': 500,
-  '超清': 480,
   '720P': 420,
-  'WEB-DL': 380,
-  'HDTV': 360,
-  '高清': 340,
   '540P': 300,
-  'DVD': 280,
   '480P': 260,
   '360P': 220,
-  'TS': 120,
-  'SD': 100,
+  '240P': 180,
+  '144P': 160,
 };
 
 const DIMENSION_PATTERN = /(\d{3,4})\s*[xX]\s*(\d{3,4})/g;
 const HLS_RESOLUTION_PATTERN = /RESOLUTION=(\d+)x(\d+)/gi;
 const TEXT_QUALITY_PATTERNS: Array<{ pattern: RegExp; width?: number; height?: number; label: string; color: string }> = [
+  { pattern: /(?:^|[^\d])(4320p?|8k)(?:[^\d]|$)/i, width: 7680, height: 4320, label: '8K', color: 'bg-rose-500' },
   { pattern: /(?:^|[^\d])(2160p?|4k|uhd)(?:[^\d]|$)/i, width: 3840, height: 2160, label: '4K', color: 'bg-amber-500' },
   { pattern: /(?:^|[^\d])(1440p?|2k|qhd)(?:[^\d]|$)/i, width: 2560, height: 1440, label: '2K', color: 'bg-emerald-500' },
   { pattern: /(?:^|[^\d])(1080p?|1080i|fhd|fullhd|full-hd)(?:[^\d]|$)/i, width: 1920, height: 1080, label: '1080P', color: 'bg-green-500' },
@@ -36,12 +31,15 @@ const TEXT_QUALITY_PATTERNS: Array<{ pattern: RegExp; width?: number; height?: n
   { pattern: /(?:^|[^\d])540p?(?:[^\d]|$)/i, width: 960, height: 540, label: '540P', color: 'bg-cyan-500' },
   { pattern: /(?:^|[^\d])480p?(?:[^\d]|$)/i, width: 854, height: 480, label: '480P', color: 'bg-sky-500' },
   { pattern: /(?:^|[^\d])360p?(?:[^\d]|$)/i, width: 640, height: 360, label: '360P', color: 'bg-gray-500' },
+  { pattern: /(?:^|[^\d])240p?(?:[^\d]|$)/i, width: 426, height: 240, label: '240P', color: 'bg-gray-500' },
+  { pattern: /(?:^|[^\d])144p?(?:[^\d]|$)/i, width: 256, height: 144, label: '144P', color: 'bg-gray-500' },
 ];
 
 export function getResolutionLabel(width: number, height: number): ResolutionProbeLabel {
   const normalizedWidth = Math.max(width, height);
   const normalizedHeight = Math.min(width, height);
 
+  if (normalizedHeight >= 4320) return { width: normalizedWidth, height: normalizedHeight, label: '8K', color: 'bg-rose-500' };
   if (normalizedHeight >= 2160) return { width: normalizedWidth, height: normalizedHeight, label: '4K', color: 'bg-amber-500' };
   if (normalizedHeight >= 1440) return { width: normalizedWidth, height: normalizedHeight, label: '2K', color: 'bg-emerald-500' };
   if (normalizedHeight >= 1080) return { width: normalizedWidth, height: normalizedHeight, label: '1080P', color: 'bg-green-500' };
@@ -49,6 +47,8 @@ export function getResolutionLabel(width: number, height: number): ResolutionPro
   if (normalizedHeight >= 540) return { width: normalizedWidth, height: normalizedHeight, label: '540P', color: 'bg-cyan-500' };
   if (normalizedHeight >= 480) return { width: normalizedWidth, height: normalizedHeight, label: '480P', color: 'bg-sky-500' };
   if (normalizedHeight >= 360) return { width: normalizedWidth, height: normalizedHeight, label: '360P', color: 'bg-gray-500' };
+  if (normalizedHeight >= 240) return { width: normalizedWidth, height: normalizedHeight, label: '240P', color: 'bg-gray-500' };
+  if (normalizedHeight >= 144) return { width: normalizedWidth, height: normalizedHeight, label: '144P', color: 'bg-gray-500' };
   return { width: normalizedWidth, height: normalizedHeight, label: `${normalizedHeight}P`, color: 'bg-gray-500' };
 }
 
@@ -95,7 +95,7 @@ export function extractResolutionHint(...values: Array<string | undefined>): Res
       });
     }
 
-    best = chooseHigherQuality(best, extractPlaybackQualityLabel(value) || null);
+    best = chooseHigherQuality(best, extractNumericResolutionLabel(value) || null);
   }
 
   return best;

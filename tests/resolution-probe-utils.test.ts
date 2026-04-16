@@ -13,9 +13,11 @@ test('extractResolutionHint recognizes resolution hints from URLs and remarks', 
   );
 
   assert.deepEqual(
-    extractResolutionHint('蓝光原盘'),
-    { label: '蓝光', color: 'bg-blue-500' }
+    extractResolutionHint('片源 1280x720'),
+    { label: '720P', color: 'bg-teal-500', width: 1280, height: 720 }
   );
+
+  assert.equal(extractResolutionHint('蓝光原盘'), null);
 });
 
 test('parseResolutionFromManifest prefers the highest explicit resolution', () => {
